@@ -43,8 +43,9 @@ uint8_t bukva_SH[8] = {B10001, B10101, B10101, B10101, B10101, B10101, B11111};/
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);  //LCD standart
 //HX711 scale;
 
+int t = 0;   //количество измерений перед автоматической передачей данных
 int tmp_1 = 0;
-boolean lang =  1 ; //0- русский язык, true - английский
+boolean lang =  0 ; //0- русский язык, true - английский
 int print_btn = 13; // Кнопка передачи данных
 //boolean scale_flag = false; //флаг стабилизации веса
 boolean print_stat = HIGH ; //текущее состояние кнопки передачи данных/принажатии переходит в 0
@@ -56,7 +57,7 @@ long SumBase_M = 0; //сумма ручного ввода базовых рас
 //описание меню
 int menupos = 0;//код пункта меню
 int menupos_end = 3; //с выбором режимаОтправки 3 - крайний пункт меню - EXIT, 0 - главное меню
-boolean outputtype = 1;  //тип вывода данных в буфер 
+boolean outputtype;  //тип вывода данных в буфер 
 //
 long SumSizeMin = 60; //порог чувствительности
 long SizeGate = 9 ;  //чувствительность к дребезгу измерения по сумме осей 
@@ -134,10 +135,13 @@ void setup()
         
 
 }
+
+ 
+
 void loop()
 {
     key_read ();   //чтение кнопок с защитой от дребезга;
-    
+    outputtype = EEPROM.read(4);
      if ((lcd_key == 5)&&(menu==LOW)) 
         {  
         sizing(); //запуск измерениe
@@ -153,7 +157,7 @@ void loop()
         }
         else if (((Size_H + Size_W + Size_L) >= SumSizeMin)&&(!print_stat_prew && print_stat)) { //размеры выше порога, кнопка в исходном состоянии, отображаем размеры
               if ((SumSize == 0) || (SumSize <= (Size_H + Size_W + Size_L - SizeGate)) || (SumSize >= (Size_H + Size_W + Size_L + SizeGate))){ //убираем "дребезг" измерения
-                  delay (600) ; 
+  //                  delay (600)   ; 
 //                 if (!scale_flag) {
 //                    display_w_process(); //экран процесса взвешивания
 //                     weighting_1();  //запуск взвешиваниz со стабилизацией
@@ -168,8 +172,16 @@ void loop()
                }
                 SumSize = (Size_H + Size_W + Size_L); //запоминаем сумму размеров
             } 
+//----------вывод данных при автоматическом типе
+        if (((Size_H + Size_W + Size_L) >= SumSizeMin)&&(outputtype && !print_stat_prew)) {
+                    Serial.println (t); t=t+1; delay(600);
+                      if ((outputtype && !print_stat_prew) && (t == 4)) {// автоматическая передача данных после 4-х замеров
+                       printing (); print_stat_prew = HIGH; t = 0;    //вывод данных и запрет на передачу данных, пока не сброшены размеры
+                      }
+                    } 
+
         
-        else if (((Size_H + Size_W + Size_L) >= SumSizeMin)&&(!print_stat_prew && !print_stat)) {
+        if (((Size_H + Size_W + Size_L) >= SumSizeMin)&&(!print_stat_prew && !print_stat)) { // || outputtype))) {
                  printing (); // передача данных
 //                    scale_flag=false; //сбрасываем весы
                  print_stat_prew = HIGH;   //запрет на передачу данных, пока не сброшены размеры
@@ -188,21 +200,25 @@ void loop()
           if (menupos == menupos_end) {menu = LOW; display_ready();} //Exit
         }
 }  //конец цикла loop
-void set_outputtype ()
+
+
+
+boolean set_outputtype ()
       {
         outputtype = EEPROM.read(4);
          display_outputtype ();
-        do {
-              key_read ();  Serial.println (adc_key_in = analogRead(0)); // чтение кнопок
+        do { 
+              key_read ();  //Serial.println (adc_key_in = analogRead(0)); // чтение кнопок
               // движение фокуса по значку осей
-              if (lcd_key == 2) {outputtype = !outputtype ; display_outputtype ();}
-              if (lcd_key == 1) {outputtype = !outputtype ; display_outputtype ();}
+              if (lcd_key == 1) {outputtype = true ; display_outputtype ();}
+              if (lcd_key == 2) {outputtype = false ; display_outputtype ();}
         }
         while (lcd_key != 4); //Сохранение данных по Центральной кнопке ДЖОЙСТИКА
               if (lcd_key == 4) {
                 EEPROM.write(4, outputtype); 
               }
            menu = LOW; display_ready();
+        return outputtype;
       }
 
 void display_outputtype ()    //дисплей выбора типа вывода
@@ -398,13 +414,11 @@ int menuposition (int lcd_key)  // навигация по меню
               lcd.setCursor(0, menupos_end);  lcd.print("  Exit");
             }
             if (!lang){
-             lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
-              lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_Ya);
+              lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
+              lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(6, bukva_P); lcd.createChar(7, bukva_RR);
               lcd.setCursor(0, 0);  lcd.print("> ABTO KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
               lcd.setCursor(0, 1);  lcd.print("  P"); lcd.write(4); lcd.write(5); lcd.print("H"); lcd.print(" KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
-              lcd.createChar(1, bukva_P); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
-              lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(8, bukva_D);
-              lcd.setCursor(0, 2);  lcd.print("  T"); lcd.write(3);lcd.write(1); lcd.print(" B"); lcd.write(7);lcd.print("BO");lcd.write(8); lcd.print("A");
+              lcd.setCursor(0, 2);  lcd.print("  T"); lcd.write(3);lcd.write(6); lcd.print("  B"); lcd.write(7);lcd.print("BO");lcd.write(8); lcd.print("A");
               lcd.setCursor(0, menupos_end);  lcd.print("  B"); lcd.write(7); lcd.print("XO"); lcd.write(8);
           }  
           menu = HIGH;
@@ -419,12 +433,10 @@ int menuposition (int lcd_key)  // навигация по меню
             }
             if (!lang){
               lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
-              lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_Ya);
+              lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(6, bukva_P); lcd.createChar(7, bukva_RR);
               lcd.setCursor(0, 0);  lcd.print("  ABTO KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
               lcd.setCursor(0, 1);  lcd.print("> P"); lcd.write(4); lcd.write(5); lcd.print("H"); lcd.print(" KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
-              lcd.createChar(1, bukva_P); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
-              lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(8, bukva_D);
-              lcd.setCursor(0, 2);  lcd.print("  T"); lcd.write(3);lcd.write(1); lcd.print(" B"); lcd.write(7);lcd.print("BO");lcd.write(8); lcd.print("A");
+              lcd.setCursor(0, 2);  lcd.print("  T"); lcd.write(3);lcd.write(6); lcd.print("  B"); lcd.write(7);lcd.print("BO");lcd.write(8); lcd.print("A");
               lcd.setCursor(0, menupos_end);  lcd.print("  B"); lcd.write(7); lcd.print("XO"); lcd.write(8);
           }
           menu = HIGH;  
@@ -439,12 +451,10 @@ int menuposition (int lcd_key)  // навигация по меню
             }
             if (!lang){
               lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
-              lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_Ya);
+              lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(6, bukva_P); lcd.createChar(7, bukva_RR);
               lcd.setCursor(0, 0);  lcd.print("  ABTO KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
               lcd.setCursor(0, 1);  lcd.print("  P"); lcd.write(4); lcd.write(5); lcd.print("H"); lcd.print(" KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
-              lcd.createChar(1, bukva_P); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
-              lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(8, bukva_D);
-              lcd.setCursor(0, 2);  lcd.print("> T"); lcd.write(3);lcd.write(1); lcd.print(" B"); lcd.write(7);lcd.print("BO");lcd.write(8); lcd.print("A");
+              lcd.setCursor(0, 2);  lcd.print("> T"); lcd.write(3);lcd.write(6); lcd.print("  B"); lcd.write(7);lcd.print("BO");lcd.write(8); lcd.print("A");
               lcd.setCursor(0, menupos_end);  lcd.print("  B"); lcd.write(7); lcd.print("XO"); lcd.write(8);
           }
           menu = HIGH;  
@@ -459,21 +469,33 @@ int menuposition (int lcd_key)  // навигация по меню
             }
             if (!lang){
               lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
-              lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_Ya);
+              lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(6, bukva_P); lcd.createChar(7, bukva_RR);
               lcd.setCursor(0, 0);  lcd.print("  ABTO KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
               lcd.setCursor(0, 1);  lcd.print("  P"); lcd.write(4); lcd.write(5); lcd.print("H"); lcd.print(" KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
-              lcd.createChar(1, bukva_P); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
-              lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(8, bukva_D);
-              lcd.setCursor(0, 2);  lcd.print("  T"); lcd.write(3);lcd.write(1); lcd.print(" B"); lcd.write(7);lcd.print("BO");lcd.write(8); lcd.print("A");
+              lcd.setCursor(0, 2);  lcd.print("  T"); lcd.write(3);lcd.write(6); lcd.print("  B"); lcd.write(7);lcd.print("BO");lcd.write(8); lcd.print("A");
               lcd.setCursor(0, menupos_end);  lcd.print("> B"); lcd.write(7); lcd.print("XO"); lcd.write(8);
             }  
           }
            return menupos;
 }  
 
-
- 
-void printing ()
+void printing () // в сантиметрах, округление вверх
+          {
+     Keyboard.print(round(float(Size_L)/10));
+             Keyboard.write(KEY_TAB);
+                delay (100);
+         Keyboard.print(round(float(Size_W)/10));
+             Keyboard.write(KEY_TAB);
+                delay (100);
+         Keyboard.print(round(float(Size_H)/10));
+              Keyboard.write(KEY_TAB);
+                delay (100);
+                  Keyboard.write(KEY_RETURN);
+                
+          display_sent ();
+          }
+/*
+void printing () // в метрах. 0,00
           {
        int s1, s2, s3, s4, s5, s6;
 
@@ -518,7 +540,7 @@ void printing ()
 
           display_sent ();
           }
-
+*/
 void display_sent ()    //экран отправленных данных в РС   
         {
         lcd.clear(); lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_P); 
@@ -632,7 +654,8 @@ void display_welcome() // заставка при включении
 
 int read_LCD_buttons() //считываем нажатие джойстика Моя плата
           {  
-          Serial.println (adc_key_in = analogRead(0)); 
+ //         Serial.println (adc_key_in = analogRead(0)); 
+          adc_key_in = analogRead(0);
           if (adc_key_in > 950)  return btnNONE; 
           if (adc_key_in < 50)   return btnUP; 
           if (adc_key_in < 600)  return btnRIGHT; 
@@ -641,5 +664,6 @@ int read_LCD_buttons() //считываем нажатие джойстика М
           if (adc_key_in < 900)  return btnLEFT;   
           return btnNONE;  
           }           
+
 
 
