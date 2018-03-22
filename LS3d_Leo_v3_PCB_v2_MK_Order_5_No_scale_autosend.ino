@@ -210,8 +210,8 @@ boolean set_outputtype ()
         do { 
               key_read ();  //Serial.println (adc_key_in = analogRead(0)); // чтение кнопок
               // движение фокуса по значку осей
-              if (lcd_key == 1) {outputtype = true ; display_outputtype ();}
-              if (lcd_key == 2) {outputtype = false ; display_outputtype ();}
+              if (lcd_key == 0) {outputtype = true ; display_outputtype ();}
+              if (lcd_key == 3) {outputtype = false ; display_outputtype ();}
         }
         while (lcd_key != 4); //Сохранение данных по Центральной кнопке ДЖОЙСТИКА
               if (lcd_key == 4) {
