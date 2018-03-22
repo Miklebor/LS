@@ -478,6 +478,8 @@ int menuposition (int lcd_key)  // навигация по меню
           }
            return menupos;
 }  
+           return menupos;
+}  
 
 void printing () // в сантиметрах, округление вверх
           {
