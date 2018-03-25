@@ -231,9 +231,9 @@ void display_outputtype ()    //дисплей выбора типа вывод�
               if (!outputtype) {lcd.setCursor(0, 2);  lcd.print(" Manual <<     Auto  ");}
             }
             if (!lang){
-              lcd.createChar(1, bukva_I); lcd.createChar(2, bukva_P); lcd.createChar(3, bukva_D);
+              lcd.createChar(1, bukva_I); lcd.createChar(2, bukva_P); lcd.createChar(3, bukva_D);lcd.createChar(7, bukva_RR);
               lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(6, bukva_IY);
-              lcd.setCursor(0, 0);  lcd.print("     T"); lcd.write(1);lcd.write(2); lcd.print(" B"); lcd.write(7);lcd.print("BO");lcd.write(8); lcd.print("A");
+              lcd.setCursor(0, 0);  lcd.print("     T"); lcd.write(1);lcd.write(2); lcd.print(" B"); lcd.write(7);lcd.print("BO");lcd.write(3); lcd.print("A");
               if (outputtype) {lcd.setCursor(0, 2);  lcd.print("  P"); lcd.write(4); lcd.write(5); lcd.write("HO"); lcd.write(6); lcd.print("   >>"); lcd.write(" ABTO");}
               if (!outputtype){lcd.setCursor(0, 2);  lcd.print("  P"); lcd.write(4); lcd.write(5); lcd.write("HO"); lcd.write(6); lcd.print(" <<  "); lcd.write(" ABTO");}
             }  
@@ -272,7 +272,6 @@ void taring() {
            lcd.setCursor(0, 3); lcd.print("  BEC    : "); weighting_1(); lcd.print(weight,prec); lcd.print(" "); lcd.write(4);//  delay (1000);}
                     } 
 }
-
 void display_w_process() //экран процесса взвешивания
         {
         lcd.clear();  
@@ -418,10 +417,10 @@ int menuposition (int lcd_key)  // навигация по меню
               lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_Ya);
               lcd.setCursor(0, 0);  lcd.print("> ABTO KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
               lcd.setCursor(0, 1);  lcd.print("  P"); lcd.write(4); lcd.write(5); lcd.print("H"); lcd.print(" KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
-              lcd.createChar(1, bukva_P); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
-              lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(8, bukva_D);
-              lcd.setCursor(0, 2);  lcd.print("  T"); lcd.write(3);lcd.write(1); lcd.print(" B"); lcd.write(7);lcd.print("BO");lcd.write(8); lcd.print("A");
-              lcd.setCursor(0, menupos_end);  lcd.print("  B"); lcd.write(7); lcd.print("XO"); lcd.write(8);
+              lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);lcd.createChar(8, bukva_P);
+              lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(6, bukva_D);
+              lcd.setCursor(0, 2);  lcd.print("  T"); lcd.write(3);lcd.write(8); lcd.print("  B"); lcd.write(7);lcd.print("BO");lcd.write(6); lcd.print("A");
+              lcd.setCursor(0, menupos_end);  lcd.print("  B"); lcd.write(7); lcd.print("XO"); lcd.write(6);
           }  
           menu = HIGH;
           }
@@ -438,10 +437,10 @@ int menuposition (int lcd_key)  // навигация по меню
               lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_Ya);
               lcd.setCursor(0, 0);  lcd.print("  ABTO KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
               lcd.setCursor(0, 1);  lcd.print("> P"); lcd.write(4); lcd.write(5); lcd.print("H"); lcd.print(" KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
-              lcd.createChar(1, bukva_P); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
-              lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(8, bukva_D);
-              lcd.setCursor(0, 2);  lcd.print("  T"); lcd.write(3);lcd.write(1); lcd.print(" B"); lcd.write(7);lcd.print("BO");lcd.write(8); lcd.print("A");
-              lcd.setCursor(0, menupos_end);  lcd.print("  B"); lcd.write(7); lcd.print("XO"); lcd.write(8);
+              lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);lcd.createChar(8, bukva_P);
+              lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(6, bukva_D);
+              lcd.setCursor(0, 2);  lcd.print("  T"); lcd.write(3);lcd.write(8); lcd.print("  B"); lcd.write(7);lcd.print("BO");lcd.write(6); lcd.print("A");
+              lcd.setCursor(0, menupos_end);  lcd.print("  B"); lcd.write(7); lcd.print("XO"); lcd.write(6);
           }
           menu = HIGH;  
           }
@@ -458,10 +457,10 @@ int menuposition (int lcd_key)  // навигация по меню
               lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_Ya);
               lcd.setCursor(0, 0);  lcd.print("  ABTO KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
               lcd.setCursor(0, 1);  lcd.print("  P"); lcd.write(4); lcd.write(5); lcd.print("H"); lcd.print(" KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
-              lcd.createChar(1, bukva_P); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
-              lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(8, bukva_D);
-              lcd.setCursor(0, 2);  lcd.print("> T"); lcd.write(3);lcd.write(1); lcd.print(" B"); lcd.write(7);lcd.print("BO");lcd.write(8); lcd.print("A");
-              lcd.setCursor(0, menupos_end);  lcd.print("  B"); lcd.write(7); lcd.print("XO"); lcd.write(8);
+              lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);lcd.createChar(8, bukva_P);
+              lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(6, bukva_D);
+              lcd.setCursor(0, 2);  lcd.print("> T"); lcd.write(3);lcd.write(8); lcd.print("  B"); lcd.write(7);lcd.print("BO");lcd.write(6); lcd.print("A");
+              lcd.setCursor(0, menupos_end);  lcd.print("  B"); lcd.write(7); lcd.print("XO"); lcd.write(6);
           }
           menu = HIGH;  
           }
@@ -478,10 +477,10 @@ int menuposition (int lcd_key)  // навигация по меню
               lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_Ya);
               lcd.setCursor(0, 0);  lcd.print("  ABTO KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
               lcd.setCursor(0, 1);  lcd.print("  P"); lcd.write(4); lcd.write(5); lcd.print("H"); lcd.print(" KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
-              lcd.createChar(1, bukva_P); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
-              lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(8, bukva_D);
-              lcd.setCursor(0, 2);  lcd.print("  T"); lcd.write(3);lcd.write(1); lcd.print(" B"); lcd.write(7);lcd.print("BO");lcd.write(8); lcd.print("A");
-              lcd.setCursor(0, menupos_end);  lcd.print("> B"); lcd.write(7); lcd.print("XO"); lcd.write(8);
+              lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);lcd.createChar(8, bukva_P);
+              lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(6, bukva_D);
+              lcd.setCursor(0, 2);  lcd.print("  T"); lcd.write(3);lcd.write(8); lcd.print("  B"); lcd.write(7);lcd.print("BO");lcd.write(6); lcd.print("A");
+              lcd.setCursor(0, menupos_end);  lcd.print("> B"); lcd.write(7); lcd.print("XO"); lcd.write(6);
             }  
           }
            return menupos;
@@ -505,7 +504,6 @@ void printing () // в сантиметрах, округление вверх
 void printing () // в метрах. 0,00
           {
        int s1, s2, s3, s4, s5, s6;
-
             s4 = ((Size_L/1000)%10);
             s3 = ((Size_L/100)%10);
             s2 = ((Size_L/10)%10);
@@ -544,7 +542,6 @@ void printing () // в метрах. 0,00
              Keyboard.print(s2);
                 delay (100);
                   Keyboard.write(KEY_RETURN);          
-
           display_sent ();
           }
 */
@@ -570,19 +567,19 @@ long calibration()   {
           }
           if (!lang) {
             lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_I); lcd.createChar(3, bukva_B); lcd.createChar(4, bukva_g); lcd.createChar(5,bukva_RR);
-            lcd.setCursor(0, 0); lcd.print("    KA"); lcd.write(1); lcd.write(2); lcd.write(3); lcd.print("POBKA  ");
+            lcd.setCursor(0, 0); lcd.print("   ABTOKA"); lcd.write(1); lcd.write(2); lcd.write(3); lcd.print("POBKA");
 //            lcd.setCursor(0, 3); lcd.print("BEC TAP"); lcd.write(5); lcd.print(": ");  weighting();lcd.print(weight, prec); lcd.print(" "); lcd.write(4);
           }
           measuring (TR_PIN_H, EC_PIN_H);  delay (30); // Прогрев
           measuring (TR_PIN_W, EC_PIN_W);  delay (30);
           measuring (TR_PIN_L, EC_PIN_L);  delay (30);
          for (int i=0; i < 5; i++) {
-          lcd.setCursor(0, 1);
-          if (i == 0) lcd.print(">>>");
-          if (i == 1) lcd.print(">>>>>>");
-          if (i == 2) lcd.print(">>>>>>>>>");
-          if (i == 3) lcd.print(">>>>>>>>>>>>");
-          if (i == 4) lcd.print(">>>>>>>>>>>>>>>");
+          lcd.setCursor(0, 2);
+          if (i == 0) lcd.print(">>>>>");
+          if (i == 1) lcd.print(">>>>>>>>");
+          if (i == 2) lcd.print(">>>>>>>>>>>");
+          if (i == 3) lcd.print(">>>>>>>>>>>>>>");
+          if (i == 4) lcd.print(">>>>>>>>>>>>>>>>>");
           delay (500);
           measuring (TR_PIN_H, EC_PIN_H); Base_H = Base_H + Size; delay (30);
           measuring (TR_PIN_W, EC_PIN_W); Base_W = Base_W + Size; delay (30);
@@ -671,5 +668,3 @@ int read_LCD_buttons() //считываем нажатие джойстика М
           if (adc_key_in < 900)  return btnLEFT;   
           return btnNONE;  
           }           
-
-
