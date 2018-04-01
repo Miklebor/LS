@@ -14,7 +14,7 @@ int adc_key_in  = 0; //сигнал от джойстика
 
 #define RS232PORT Serial1
 #define RS232BAUDRATE 4800
-
+int weight = 0;
 
 
 
@@ -22,7 +22,7 @@ void setup()
 {
  Serial.begin (9600); lcd.begin(20, 4);  Keyboard.begin(); 
  pinMode(10,OUTPUT); digitalWrite(10, 1); //Включаем Подсветка LCD
- RS232PORT.begin (RS232BAUDRATE);
+ Serial1.begin (4800);
  lcd.clear() ; 
 }
 
@@ -32,22 +32,25 @@ void loop() {
   
 byte cData[10];
 int nBytesAvail =0;
-int nBytes = 0;
+byte nBytes[10];
 
 key_read ();   //чтение кнопок с защитой от дребезга;
-          if (lcd_key == 1){Serial1.write(0x45); }
-          if (lcd_key == 2){Serial1.write(0x4A);}  
+          if (lcd_key == 1){Serial1.write(0x45);}
+          if (lcd_key == 2){Serial1.write(0x4A);} 
+          if (lcd_key == 0){lcd.clear();} 
 
-if (RS232PORT.available()>0) {
+if (Serial1.available()>0) {
  // Serial.println (nBytesAvail);delay (500);
                 lcd.clear() ;// lcd.setCursor(0,1); lcd.print (nBytesAvail); 
-                for (int n=0; n < 14; n=n+3){
-                nBytes = RS232PORT.read();  
-                lcd.setCursor(n,2); if (nBytes>0)lcd.print(nBytes); 
+                for (int n=0; n < 18; n=n+9){
+                nBytes[n] = Serial1.read();  
+                lcd.setCursor(9-n,0); if (nBytes[n] > 0) {lcd.print("nBytes");lcd.print(n);} 
+                lcd.setCursor(9-n,1); if (nBytes[n] > 0) {lcd.print(nBytes[n],BIN);} 
+                lcd.setCursor(9-n,2); if (nBytes[n] > 0) {lcd.print(nBytes[n],DEC);} 
                 delay (50);
                 }
-  //              //nBytes = 0; nBytesAvail = 0; 
-  //              cData[0,1,2,3,4,5,6,7,8,9] = 0;
+  weight = (nBytes[0] | (nBytes[9] << 8));
+ lcd.setCursor(0,3); lcd.print(weight,DEC); 
     }
 
 /*
@@ -107,3 +110,4 @@ lcd.setCursor(n,1); lcd.print (a, DEC);
 }
 
 */ 
+  
