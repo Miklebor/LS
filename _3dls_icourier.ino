@@ -5,16 +5,16 @@
 //   02.11.2017                                            //
 //   3D Сканер размеров упаковки.                          //
 /////////////////////////////////////////////////////////////
-//Базовая версия с прямой калибровкой размеров,подключение весов через COM-порт
-//Передача данных в COM порт по запросу с РС
+//Базовая версия с прямой калибровкой размеров,подключение весов через COM-порт1 !
 //Выход на исходную позицию для сканирования
 //Размещаем коробку с известными размерами и настраиваем их отображение наиболее точно.
 //Максимальные размеры  x  x 0 cm
 //макс. вес:  40 кг (выводятся 3 разряда для целых кг, 3 разряда для граммов)
 //вывод:      размеры в см (3 разряда), 1 знак после запятой
 //            вес в кг, 3 знака после запятой 
-// десятичный разделитель - запятая 
-// порядок и разделитель: L TAB W TAB H TAB Wg ENTER
+//Передача данных в COM порт по запросу с РС:
+//Строка вывода: 
+
 uint8_t tochki[8] = {B0, B00000, B0, B0, B0, B0, B10101}; //...
 uint8_t bukva_P[8] = {0x1F, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11}; //П
 uint8_t bukva_Ya[8] = {B01111, B10001, B10001, B01111, B00101, B01001, B10001};//Я
@@ -42,9 +42,8 @@ uint8_t bukva_SH[8] = {B10001, B10101, B10101, B10101, B10101, B10101, B11111};/
 
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);  //LCD standart
 //HX711 scale;
-
-int tmp_1 = 0;
-boolean lang =  1; //0- русский язык, true - английский
+int t = 0;   //количество измерений перед автоматической передачей данных
+boolean lang =  0; //0- русский язык, true - английский
 int print_btn = 13; // Кнопка передачи данных
 boolean scale_flag = false; //флаг стабилизации веса
 boolean print_stat = HIGH ; //текущее состояние кнопки передачи данных/при нажатии переходит в 0
@@ -57,6 +56,7 @@ long SumBase_M = 0; //сумма ручного ввода базовых рас
 int menupos = 0;//код пункта меню
 int menupos_end = 4; //крайний пункт меню - EXIT, 0 - главное меню
 boolean outputtype = 0;  //тип вывода данных в буфер ручн/автом
+boolean outputway = 0;  // канал вывода  клавиатура/компорт
 //
 long SumSizeMin = 60; //порог чувствительности
 long SizeGate = 9 ;  //чувствительность к дребезгу измерения по сумме осей 
@@ -88,28 +88,19 @@ int adc_key_in  = 0; //сигнал от джойстика
 #define btnLEFT      3
 #define btnSELECT    4
 #define btnNONE      5   
-//#define btnEncodeOK  6 
 //Взвешивание
 float weight = 0; //полученный вес
-float weight_key = 26; //стартовый коэффициент для калибровки весов
-int weight_gate = 20; //минимально взвешиваемый вес
+int weight_gate = 0.02; //минимально взвешиваемый вес
 int prec = 0; //точность вывода веса 0 - без знаков после запятой
-//int DOUT = 11;// - pin #D11
-//int SCK = 12; //- pin #D12
 
 
 void setup()
 {
-  Serial.begin (9600); 
-  Serial1.begin (4800, SERIAL_8E1); 
+  Serial.begin (9600); Serial1.begin (9600); 
   lcd.begin(20, 4);  Keyboard.begin(); 
   pinMode(TR_PIN_H,OUTPUT); pinMode(EC_PIN_H,INPUT_PULLUP);    // set TP output for trigger, EP input for echo
   pinMode(TR_PIN_W,OUTPUT); pinMode(EC_PIN_W,INPUT_PULLUP);    
   pinMode(TR_PIN_L,OUTPUT); pinMode(EC_PIN_L,INPUT_PULLUP); 
-  //EEPROM.get(6, weight_key); //Serial.println(weight_key);
-  //if ((weight_key <= 0)||(weight_key >1000000)) {weight_key = 26;}   
-  //EEPROM.put(6, 26); 
-//  scale.begin(11, 12); scale.set_scale(weight_key);   
   pinMode (print_btn, INPUT_PULLUP);
   pinMode(10,OUTPUT); digitalWrite(10, 1); //Включаем Подсветка LCD
   display_welcome();    // приглашение
@@ -118,7 +109,7 @@ void setup()
   Base_L = EEPROM.read(14) | (EEPROM.read(15) << 8);
   SumBase_M = (Base_H + Base_W + Base_L);
      if (SumBase_M == 0) { // если значения 0 - автокалибруем 
-//      calibration(); //основная калибровка
+     calibration(); //основная калибровка
      }
      else { // берем базовые значения из памяти
         lcd.clear();
@@ -130,73 +121,57 @@ void setup()
         lcd.setCursor(8, 3);  lcd.print(Base_W);
         lcd.setCursor(13, 3); lcd.print(Base_L);
      }
-//        scale.tare();   //начальная тарировка весов
          delay (1000);
-        //taring();  
-        
- Serial1.read(); 
+//Serial1.read(); 
 }
+
 void loop()
 {
-    key_read ();   //чтение кнопок с защитой от дребезга;
-     outputtype = EEPROM.read(4);
-     weighting();
+   key_read ();   //чтение кнопок с защитой от дребезга;
+    outputtype = EEPROM.read(4);
      if ((lcd_key == 5)&&(menu==LOW)) 
         {  
         sizing(); //запуск измерениe
-           //weighting(); Serial.print("fast weight"); Serial.println(weight);      // вылавливал дрейф тары
-          print_stat = digitalRead (print_btn);
-        if (((Size_H + Size_W + Size_L) < SumSizeMin)&&(!print_stat_prew && print_stat)) {
-           if (tmp_1 == 0) { //впомогательный счетчик, чтобы избавится от мигания экрана в цикле loop
-            scale_flag = false;  //сбрасываем весы
-            display_ready();// размеры меньше порога и кнопка в исходном состоянии, 
-            tmp_1 ++;
-            if (tmp_1 > 5) tmp_1 = 0;
-           }
-        }
-        else if (((Size_H + Size_W + Size_L) >= SumSizeMin)&&(!print_stat_prew && print_stat)) { //размеры выше порога, кнопка в исходном состоянии, отображаем размеры
+            print_stat = digitalRead (print_btn); //запрос состояния кнопки
+        if      (((Size_H + Size_W + Size_L) <  SumSizeMin)&&(!print_stat_prew && print_stat)) {display_ready(); weight = 0;} //Размеры стали меньше порога
+        else if (((Size_H + Size_W + Size_L) >= SumSizeMin)&&(!print_stat_prew && print_stat)) { //размеры выше порога, кнопка в исходном состоянии, отображаем размеры и вес
+                 if (weight == 0) {weighting ();  display_ok();} //добиваемся чтобы вес побыстрее оказался на экране, затем убираем дребезг размеров
               if ((SumSize == 0) || (SumSize <= (Size_H + Size_W + Size_L - SizeGate)) || (SumSize >= (Size_H + Size_W + Size_L + SizeGate))){ //убираем "дребезг" измерения
-                  delay (600) ; 
-                  if (!scale_flag) {
-                    display_w_process(); //экран процесса взвешивания
-                     weighting_1();  //запуск взвешивание со стабилизацией
-                }
-                if (weight !=0){
                  sizing(); //запуск измерениe    
-                  display_ok(); //отображение измерений
-                }
-                else {display_ready();}
-
-                tmp_1 = 0;
-               }
+                   display_ok(); //отображение измерений
+                   }
                 SumSize = (Size_H + Size_W + Size_L); //запоминаем сумму размеров
             } 
+//----------вывод данных при автоматическом типе
+        if (((Size_H + Size_W + Size_L) >= SumSizeMin)&&(outputtype && !print_stat_prew)) {
+                     t=t+1; delay(600); //Serial.println (t);
+                      if ((outputtype && !print_stat_prew) && (t == 4)) {// автоматическая передача данных после 4-х замеров
+                       printing (); print_stat_prew = HIGH; t = 0;    //вывод данных и запрет на передачу данных, пока не сброшены размеры
+                       weight = 0; //сбрасываем вес
+                      }
+                    } 
+
         
-        else if (((Size_H + Size_W + Size_L) >= SumSizeMin)&&(!print_stat_prew && !print_stat)) {
+        if (((Size_H + Size_W + Size_L) >= SumSizeMin)&&(!print_stat_prew && !print_stat)) { // || outputtype))) {
                  printing (); // передача данных
-                    scale_flag = false; //сбрасываем весы
-                 print_stat_prew = HIGH;   //запрет на передачу данных, пока не сброшены размеры
+                  weight = 0; //сбрасываем вес
+                   print_stat_prew = HIGH;   //запрет на передачу данных, пока не сброшены размеры
                  }
         else if (((Size_H + Size_W + Size_L) < SumSizeMin)&&(print_stat_prew && print_stat)) print_stat_prew = LOW; //перезапуск в режим измерений       
         }
 //обработка нажатия кнопок в режиме меню 
-     else if ((lcd_key == 4)&&(menu == LOW )) menuposition(lcd_key) ;//главное меню          
+     else if ((lcd_key == 4)&&(menu == LOW))  menuposition (lcd_key);//главное меню          
      else if ((lcd_key == 2)&&(menu == HIGH)) menuposition (lcd_key); //меню вниз
      else if ((lcd_key == 1)&&(menu == HIGH)) menuposition (lcd_key); //меню вверх
      else if ((lcd_key == 0)&&(menu == HIGH)) {
-          if (menupos == 0) {
-            calibration();  //Калибровка
-            for (int i = 10 ; i < EEPROM.length() ; i++) EEPROM.write(i, 0);// очистка памяти начиная с 10-й ячейки, не трогаем 8 и 9 там тарировка
-          }
+          if (menupos == 0) {calibration(); 
+                              for (int i = 10; i < EEPROM.length(); i++) EEPROM.write(i, 0);} // очистка памяти начиная с 10-й ячейки, не трогаем 4 - тип выводв          }
           if (menupos == 1) manual_calibration();  //Ручная Калибровка 
-          if (menupos == 2) weighting_request();//taring();  //Тарировка-------------------
-          if (menupos == 3) set_outputtype(); 
-          if (menupos == menupos_end) {
-            menu = LOW; 
-            display_ready();   // Exit
-          }
-      }
-  }   //конец цикла loop
+          if (menupos == 2) set_outputway();  //Выбор канала вывода
+          if (menupos == 3) set_outputtype();  //Выбор типа вывода
+          if (menupos == menupos_end) {menu = LOW; display_ready();} //Exit
+        }
+}  //конец цикла loop
 
 //вызываемые функции
 //запрос веса
@@ -204,38 +179,46 @@ float weighting_request(){
    Serial1.read(); 
      Serial1.write(0x4A); 
 }
-// получение веса
-float weighting(){
-  byte cData[5] = {0};
-  int nBytesAvail = 0;
-       
-         if (Serial1.available()>2) {
-           delay(15);
-            lcd.clear(); lcd.setCursor (0,0); lcd.print(" 1  2  3  4  5"); 
-            nBytesAvail = Serial1.available();
-              for (int i=0; i<5; i++) {
-                Serial1.readBytes(&cData[0], nBytesAvail); 
-                lcd.setCursor(i*3,1); 
-                lcd.print(cData[i],HEX); 
-                delay(100);}
+// получение веса (весы МЕРА протокол печати этикеток) 
+float weighting (){
+    if (Serial1.available()>20) {int tmp = Serial1.parseInt(); weight = Serial1.parseFloat(); delay(20); Serial1.write("!"); }
+        return weight;
+}
+
+boolean set_outputway()
+      {
+        outputway = EEPROM.read(6); display_outputway ();
+        do { 
+              key_read ();  //Serial.println (adc_key_in = analogRead(0)); // чтение кнопок
+              if (lcd_key == 0) {outputway = true  ; display_outputway();}
+              if (lcd_key == 3) {outputway = false ; display_outputway();}
+        }
+        while (lcd_key != 4); //Сохранение данных по Центральной кнопке ДЖОЙСТИКА
+              if (lcd_key == 4) {EEPROM.write(6, outputway);}
+           menu = LOW; display_ready();
+        return outputway;
+      }
+
+void display_outputway()    //дисплей выбора типа вывода
+        {
+        lcd.clear(); 
+            lcd.setCursor(0, 1);
+            if (lang){
+              lcd.setCursor(0, 0);  lcd.print("  Output channel");
+              if (outputway)  {lcd.setCursor(0, 2);  lcd.print("Keyboard   >> Serial");}
+              if (!outputway) {lcd.setCursor(0, 2);  lcd.print("Keyboard <<   Serial");}
+            }
+            if (!lang){
+              lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_I); lcd.createChar(3, bukva_D);lcd.createChar(7, bukva_RR);lcd.createChar(4, bukva_Y); 
+              lcd.setCursor(0, 0);  lcd.print("   KAHA"); lcd.write(1); lcd.print(" B"); lcd.write(7);lcd.print("BO");lcd.write(3); lcd.print("A");
+              if (outputway)  {lcd.setCursor(0, 2); lcd.print("K"); lcd.write(1); lcd.write("AB");lcd.write(2);lcd.write("AT"); lcd.write(4); lcd.write("PA"); lcd.print("  >> "); lcd.write("COM");}
+              if (!outputway) {lcd.setCursor(0, 2); lcd.print("K"); lcd.write(1); lcd.write("AB");lcd.write(2);lcd.write("AT"); lcd.write(4); lcd.write("PA"); lcd.print(" <<  "); lcd.write("COM");}
+            }  
          }
-     // delay (5000);
-//     if ((weight/weight_gate)<1) {Serial.print(weight); Serial.println(" gate "); weight = 0; } //вылавливаю дрейф тары
-//     weight = ((round(weight/10))*10);
-  //return weight;
-}
-//сброс веса тары ---------------------- сделать
-void taring() {
-   lcd.clear();  lcd.setCursor(0, 0);  lcd.print("    Scale Reset");  
-   Serial1.write(0x0E);
-   delay(3000);
-   menu = LOW;  lcd.clear();   display_ready();//выход в меню 
-}
 
 boolean set_outputtype()
       {
-        outputtype = EEPROM.read(4);
-         display_outputtype ();
+        outputtype = EEPROM.read(4); display_outputtype ();
         do { 
               key_read ();  //Serial.println (adc_key_in = analogRead(0)); // чтение кнопок
               // движение фокуса по значку осей
@@ -243,9 +226,7 @@ boolean set_outputtype()
               if (lcd_key == 3) {outputtype = false ; display_outputtype();}
         }
         while (lcd_key != 4); //Сохранение данных по Центральной кнопке ДЖОЙСТИКА
-              if (lcd_key == 4) {
-                EEPROM.write(4, outputtype); 
-              }
+              if (lcd_key == 4) {EEPROM.write(4, outputtype);}
            menu = LOW; display_ready();
         return outputtype;
       }
@@ -284,44 +265,14 @@ void display_ready() //экран готовности к измерению
         {
         lcd.clear();  
         if (lang) {
-            lcd.setCursor(0, 0);  lcd.print("     Ready for");
-            lcd.setCursor(0, 1);  lcd.print("    measurement");
+            lcd.setCursor(0, 1);  lcd.print("     Ready for");
+            lcd.setCursor(0, 2);  lcd.print("    measurement");
             }         
         if (!lang) { // на русском
             lcd.createChar(1, bukva_G); lcd.createChar(2, bukva_B); 
             lcd.setCursor(0, 1);  lcd.print("   "); lcd.write(1); lcd.print("OTOB K PA"); lcd.write(2); lcd.print("OTE");
             } 
         }        
-
-
-//запрос веса --------------------------------сделать
-float weighting_1 (){
- 
-  long i=0; //делаем стабилизацию веса
-  float weight_tmp = 0; float weight_tmp_next = 0; 
-//  weight_tmp = scale.get_units(4), 0;  //среднее от 5 измерений
-     if ((weight_tmp / weight_gate)<1) {
-     weight = 0; Serial.print(weight_tmp); Serial.println(" gate "); 
-     return weight;
-  }
-    do {
-//         weight_tmp = scale.get_units(4), 0;  //среднее от 5 измерений
-          //delay (15);
-//           weight_tmp_next = scale.get_units(5), 0; 
-            Serial.print("tmp"); Serial.print(weight_tmp); Serial.print(" next"); Serial.print (weight_tmp_next); Serial.print(" k= "); Serial.println(weight_tmp_next/weight_tmp);
-             if (((weight_tmp_next / weight_tmp)<1.05)&&((weight_tmp_next/weight_tmp))>0.95) {i++;}
-             else {i--;}
-             //Serial.print("i = "); Serial.println(i);
-     }
-    
-  while ((i<3)&&(i>-3)); //добиваемся стабильного результата 3 взвешивания в диапазоне +-5% и защищаемся от сбоев (отриц. счетчик)
-    if (i==3) {weight = ((round(weight_tmp_next/10))*10);}
-    else {weight = 0; lcd.clear(); lcd.setCursor(0,1); lcd.print ("      Error... "); delay(1500); }
- // Serial.println (weight);
-  scale_flag = true;
-  
-   return weight;
-}
 
 
 //Функция MANUAL калибровки, измеряем 3 раза, находим среднее арифметическое, оставляем 
@@ -418,36 +369,7 @@ int display_manualcorr (int focuspos) {
                   if (!lang) {lcd.setCursor(0, 3); lcd.print("  BEC    >");} 
                   lcd.setCursor(0, focuspos); lcd.print(">");
                   }
-/*
-int weight_manualcorr ()  //настройка тензодатчика
-      {
-      taring();
-      int f_pos = 0; //коэффициент для настройки веса
-         do {
-              key_read ();  Serial.println (adc_key_in = analogRead(0)); // чтение кнопок
-              lcd.setCursor(9, 2);  weighting(); lcd.print(weight, prec); 
-              display_weight_colibr(f_pos, weight_key);
-              // движение фокуса по значку осей
-              if (lcd_key == 0) {f_pos = f_pos + 1 ; display_weight_colibr(f_pos, weight_key);}
-              if (lcd_key == 3) {f_pos = f_pos - 1 ; display_weight_colibr(f_pos, weight_key);}
-              if (f_pos < -2) {f_pos = 2; display_weight_colibr(f_pos, weight_key);}
-              if (f_pos > 2) {f_pos = -2; display_weight_colibr(f_pos, weight_key);}
-              //конец блока обработки фокуса
 
-              //корекция значений
-              if (lcd_key == 2){weight_key = weight_key + pow (10, f_pos); display_weight_colibr(f_pos, weight_key);}
-              if (lcd_key == 1){weight_key = weight_key - pow (10, f_pos); display_weight_colibr(f_pos, weight_key);}
-              }
-          while (lcd_key != 4); //Сохранение данных по Центральной кнопке ДЖОЙСТИКА
-              if (lcd_key == 4) {
-               EEPROM.put(6, weight_key); 
-//               scale.set_scale(weight_key);
-               }
-               menu = LOW;  //выход в меню
-               display_ready();
-               return weight_key;           
-      }
-*/
 void display_weight_colibr(int f_pos, float weight_key ){
   lcd.clear();
             if (lang){
@@ -492,20 +414,20 @@ int menuposition (int lcd_key)  // навигация по меню
             if (lang){
               lcd.setCursor(0, 0);  lcd.print("> Auto   Calibr");
               lcd.setCursor(0, 1);  lcd.print("  Manual Calibr");
-              lcd.setCursor(0, 2);  lcd.print("  Tare Correction");
+              lcd.setCursor(0, 2);  lcd.print("  Output channel");
               lcd.setCursor(0, 3);  lcd.print("  Output type");
             }
             if (!lang){
               lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
               lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_Ya);
-              lcd.setCursor(0, 0);  lcd.print("> ABTO KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
-              lcd.setCursor(0, 1);  lcd.print("  P"); lcd.write(4); lcd.write(5); lcd.print("H"); lcd.print(" KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
+              lcd.setCursor(0, 0);  lcd.print("> ABTO  KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
+              lcd.setCursor(0, 1);  lcd.print("  P"); lcd.write(4); lcd.write(5); lcd.print("H"); lcd.print("  KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
               lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
               lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(8, bukva_D);
-              lcd.setCursor(0, 2);  lcd.print("  TAP"); lcd.write(3);lcd.print("POBKA");
+              lcd.setCursor(0, 2);  lcd.print("  KAHA"); lcd.write(1);lcd.print(" B"); lcd.write(7);lcd.print("BO"); lcd.write(6); lcd.print("A");
               lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);lcd.createChar(8, bukva_P);
               lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(6, bukva_D);
-              lcd.setCursor(0, 3);  lcd.print("  T"); lcd.write(3);lcd.write(8); lcd.print("  B"); lcd.write(7);lcd.print("BO");lcd.write(6); lcd.print("A");
+              lcd.setCursor(0, 3);  lcd.print("  T"); lcd.write(3);lcd.write(8); lcd.print("   B"); lcd.write(7);lcd.print("BO");lcd.write(6); lcd.print("A");
            }  
           menu = HIGH;
           }
@@ -514,20 +436,20 @@ int menuposition (int lcd_key)  // навигация по меню
             if (lang){
               lcd.setCursor(0, 0);  lcd.print("  Auto   Calibr");
               lcd.setCursor(0, 1);  lcd.print("> Manual Calibr");
-              lcd.setCursor(0, 2);  lcd.print("  Tare Correction");
+              lcd.setCursor(0, 2);  lcd.print("  Output channel");
               lcd.setCursor(0, 3);  lcd.print("  Output type");
             }
             if (!lang){
               lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
               lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_Ya);
-              lcd.setCursor(0, 0);  lcd.print("  ABTO KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
-              lcd.setCursor(0, 1);  lcd.print("> P"); lcd.write(4); lcd.write(5); lcd.print("H"); lcd.print(" KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
+              lcd.setCursor(0, 0);  lcd.print("  ABTO  KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
+              lcd.setCursor(0, 1);  lcd.print("> P"); lcd.write(4); lcd.write(5); lcd.print("H"); lcd.print("  KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
               lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
               lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(8, bukva_D);
-              lcd.setCursor(0, 2);  lcd.print("  TAP"); lcd.write(3);lcd.print("POBKA");
+              lcd.setCursor(0, 2);  lcd.print("  KAHA"); lcd.write(1);lcd.print(" B"); lcd.write(7);lcd.print("BO"); lcd.write(6); lcd.print("A");
               lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);lcd.createChar(8, bukva_P);
               lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(6, bukva_D);
-              lcd.setCursor(0, 3);  lcd.print("  T"); lcd.write(3);lcd.write(8); lcd.print("  B"); lcd.write(7);lcd.print("BO");lcd.write(6); lcd.print("A");
+              lcd.setCursor(0, 3);  lcd.print("  T"); lcd.write(3);lcd.write(8); lcd.print("   B"); lcd.write(7);lcd.print("BO");lcd.write(6); lcd.print("A");
            }
           menu = HIGH;  
           }
@@ -536,20 +458,20 @@ int menuposition (int lcd_key)  // навигация по меню
            if (lang){
               lcd.setCursor(0, 0);  lcd.print("  Auto   Calibr");
               lcd.setCursor(0, 1);  lcd.print("  Manual Calibr");
-              lcd.setCursor(0, 2);  lcd.print("> Tare Correction");
+              lcd.setCursor(0, 2);  lcd.print("> Output channel");
               lcd.setCursor(0, 3);  lcd.print("  Output type");
             }
             if (!lang){
               lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
               lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_Ya);
-              lcd.setCursor(0, 0);  lcd.print("  ABTO KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
-              lcd.setCursor(0, 1);  lcd.print("  P"); lcd.write(4); lcd.write(5); lcd.print("H"); lcd.print(" KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
+              lcd.setCursor(0, 0);  lcd.print("  ABTO  KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
+              lcd.setCursor(0, 1);  lcd.print("  P"); lcd.write(4); lcd.write(5); lcd.print("H"); lcd.print("  KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
               lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
               lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(8, bukva_D);
-              lcd.setCursor(0, 2);  lcd.print("> TAP"); lcd.write(3);lcd.print("POBKA");
+              lcd.setCursor(0, 2);  lcd.print("> KAHA"); lcd.write(1);lcd.print(" B"); lcd.write(7);lcd.print("BO"); lcd.write(6); lcd.print("A");
               lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);lcd.createChar(8, bukva_P);
               lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(6, bukva_D);
-              lcd.setCursor(0, 3);  lcd.print("  T"); lcd.write(3);lcd.write(8); lcd.print("  B"); lcd.write(7);lcd.print("BO");lcd.write(6); lcd.print("A");
+              lcd.setCursor(0, 3);  lcd.print("  T"); lcd.write(3);lcd.write(8); lcd.print("   B"); lcd.write(7);lcd.print("BO");lcd.write(6); lcd.print("A");
           }
           menu = HIGH;  
           }
@@ -558,20 +480,20 @@ int menuposition (int lcd_key)  // навигация по меню
            if (lang){
               lcd.setCursor(0, 0);  lcd.print("  Auto   Calibr");
               lcd.setCursor(0, 1);  lcd.print("  Manual Calibr");
-              lcd.setCursor(0, 2);  lcd.print("  Tare Correction");
+              lcd.setCursor(0, 2);  lcd.print("  Output channel");
               lcd.setCursor(0, 3);  lcd.print("> Output type");
               }
             if (!lang){
               lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
               lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_Ya);
-              lcd.setCursor(0, 0);  lcd.print("  ABTO KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
-              lcd.setCursor(0, 1);  lcd.print("  P"); lcd.write(4); lcd.write(5); lcd.print("H"); lcd.print(" KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
+              lcd.setCursor(0, 0);  lcd.print("  ABTO  KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
+              lcd.setCursor(0, 1);  lcd.print("  P"); lcd.write(4); lcd.write(5); lcd.print("H"); lcd.print("  KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
               lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
               lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(8, bukva_D);
-              lcd.setCursor(0, 2);  lcd.print("  TAP"); lcd.write(3);lcd.print("POBKA");
+              lcd.setCursor(0, 2);  lcd.print("  KAHA"); lcd.write(1);lcd.print(" B"); lcd.write(7);lcd.print("BO"); lcd.write(6); lcd.print("A");
               lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);lcd.createChar(8, bukva_P);
               lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(6, bukva_D);
-              lcd.setCursor(0, 3);  lcd.print("> T"); lcd.write(3);lcd.write(8); lcd.print("  B"); lcd.write(7);lcd.print("BO");lcd.write(6); lcd.print("A");
+              lcd.setCursor(0, 3);  lcd.print("> T"); lcd.write(3);lcd.write(8); lcd.print("   B"); lcd.write(7);lcd.print("BO");lcd.write(6); lcd.print("A");
           }
           menu = HIGH;  
           }
@@ -580,20 +502,20 @@ int menuposition (int lcd_key)  // навигация по меню
           lcd.clear();
           if (lang){
               lcd.setCursor(0, 0);  lcd.print("  Manual Calibr");
-              lcd.setCursor(0, 1);  lcd.print("  Tare Correction");
+              lcd.setCursor(0, 1);  lcd.print("  Output channel");
               lcd.setCursor(0, 2);  lcd.print("  Output type");
               lcd.setCursor(0, 3);  lcd.print("> Exit");
             }
             if (!lang){
               lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
               lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_Ya);
-              lcd.setCursor(0, 0);  lcd.print("  P"); lcd.write(4); lcd.write(5); lcd.print("H"); lcd.print(" KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
+              lcd.setCursor(0, 0);  lcd.print("  P"); lcd.write(4); lcd.write(5); lcd.print("H"); lcd.print("  KA"); lcd.write(1);lcd.write(3);lcd.write(2); lcd.print("P");
               lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);
               lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(8, bukva_D);
-              lcd.setCursor(0, 1);  lcd.print("  TAP"); lcd.write(3);lcd.print("POBKA");
+              lcd.setCursor(0, 1);  lcd.print("  KAHA"); lcd.write(1);lcd.print(" B"); lcd.write(7);lcd.print("BO"); lcd.write(6); lcd.print("A");
               lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_B); lcd.createChar(3, bukva_I);lcd.createChar(8, bukva_P);
               lcd.createChar(4, bukva_Y); lcd.createChar(5, bukva_CH); lcd.createChar(7, bukva_RR); lcd.createChar(6, bukva_D);
-              lcd.setCursor(0, 2);  lcd.print("  T"); lcd.write(3);lcd.write(8); lcd.print("  B"); lcd.write(7);lcd.print("BO");lcd.write(6); lcd.print("A");
+              lcd.setCursor(0, 2);  lcd.print("  T"); lcd.write(3);lcd.write(8); lcd.print("   B"); lcd.write(7);lcd.print("BO");lcd.write(6); lcd.print("A");
               lcd.setCursor(0, 3);  lcd.print("> B"); lcd.write(7); lcd.print("XO"); lcd.write(6);
             }  
           }
@@ -710,6 +632,7 @@ long calibration()   {
         //Serial.print("H-"); Serial.print(Base_H)  ;Serial.print(" W-"); Serial.print(Base_W)  ;Serial.print(" L-"); Serial.println(Base_L)  ;
         return Base_H, Base_W, Base_L; //Возвращаем базовые размеры по осям
         }
+
 void display_result(long delay_time_1) {
  lcd.clear(); // вывод на экран всех параметров
                   lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_I); lcd.createChar(3, bukva_D); lcd.createChar(4, bukva_g); lcd.createChar(5,bukva_RR);
@@ -739,20 +662,19 @@ long sizing () {  // обмер по трем осям
           measuring (TR_PIN_W, EC_PIN_W); Size_W = Base_W - Size; delay (30);
           measuring (TR_PIN_L, EC_PIN_L); Size_L = Base_L - Size; delay (30);
          menu = LOW;
-         //Serial.print("H-"); Serial.print(Base_H)  ;Serial.print("W-"); Serial.print(Base_W)  ;Serial.print("L-"); Serial.println(Base_L)  ;
+        weighting(); //Serial.print("fast weight"); Serial.println(weight);      // вылавливал дрейф тары
+        // Serial.print(" H-"); Serial.print(Base_H)  ;Serial.print(" W-"); Serial.print(Base_W)  ;Serial.print(" L-"); Serial.println(Base_L)  ;
         return Size_H, Size_W, Size_L; //Измеряем про осям по осям
         }
 
 void display_ok ()   //экран режима измерения   
         {
        // int s1,s2,s3,s4,s5;
-        lcd.clear();
-        lcd.createChar(4, bukva_g); 
+        lcd.clear(); lcd.createChar(4, bukva_g); 
             display_result(0);
-            if (lang) {lcd.setCursor(0, 3);  lcd.print("  Weight: "); lcd.print(weight,prec); lcd.print(" g");}
-            if (!lang) {lcd.setCursor(0, 3);  lcd.print("  BEC    : "); lcd.print(weight,prec); lcd.print(" "); lcd.write(4); } // без преобразования типа
-            //делю на 10 округляю и умножаю на 10
-           }
+            if (lang)  {lcd.setCursor(0, 3);  lcd.print("  Weight : "); lcd.print(weight); lcd.print(" kg");}
+            if (!lang) {lcd.setCursor(0, 3);  lcd.print("  BEC    : "); lcd.print(weight); lcd.print(" K"); lcd.write(4); } // без преобразования типа
+            }
 
 void display_welcome() // заставка при включении
          {
@@ -774,15 +696,8 @@ void display_welcome() // заставка при включении
 
 int read_LCD_buttons() //считываем нажатие джойстика Моя плата
           {  
-          Serial.println (adc_key_in = analogRead(0)); 
-        /*  if (adc_key_in > 900)  return btnNONE; 
-          if (adc_key_in < 50)   return btnUP; 
-          if (adc_key_in < 350)  return btnRIGHT; 
-          if (adc_key_in < 500)  return btnDOWN;
-          if (adc_key_in < 630)  return btnSELECT;        
-          if (adc_key_in < 750)  return btnLEFT;   
-          return btnNONE;  // when all others fail, return this... */
-          //для платы v 2.2  //// v.2.1 перепутаны кнопки лево и право
+         // Serial.println (adc_key_in = analogRead(0)); 
+          adc_key_in = analogRead(0); 
           if (adc_key_in > 950)  return btnNONE; 
           if (adc_key_in < 50)   return btnUP; 
           if (adc_key_in < 600)  return btnRIGHT; 
@@ -790,5 +705,4 @@ int read_LCD_buttons() //считываем нажатие джойстика М
           if (adc_key_in < 800)  return btnSELECT;        
           if (adc_key_in < 900)  return btnLEFT;   
           return btnNONE;  
-          }           
-
+          }          
