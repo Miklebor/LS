@@ -55,8 +55,9 @@ long SumBase_M = 0; //сумма ручного ввода базовых рас
 //описание меню
 int menupos = 0;//код пункта меню
 int menupos_end = 4; //крайний пункт меню - EXIT, 0 - главное меню
-boolean outputtype = 0;  //тип вывода данных в буфер ручн/автом
-boolean outputway = 0;  // канал вывода  клавиатура/компорт
+boolean outputtype = 0;  //тип вывода данных в буфер 0 - ручн, 1 - автомат
+boolean outputway = 0;  // канал вывода   0 - клавиатура, 1 - компорт по команде РС
+boolean incomerequest = 0; //1 поступление входящего запроса данных
 //
 long SumSizeMin = 60; //порог чувствительности
 long SizeGate = 9 ;  //чувствительность к дребезгу измерения по сумме осей 
@@ -104,6 +105,7 @@ void setup()
   pinMode (print_btn, INPUT_PULLUP);
   pinMode(10,OUTPUT); digitalWrite(10, 1); //Включаем Подсветка LCD
   display_welcome();    // приглашение
+  outputtype = EEPROM.read(4); outputway = EEPROM.read(6);
   Base_H = EEPROM.read(10) | (EEPROM.read(11) << 8);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
   Base_W = EEPROM.read(12) | (EEPROM.read(13) << 8);
   Base_L = EEPROM.read(14) | (EEPROM.read(15) << 8);
@@ -128,36 +130,40 @@ void setup()
 void loop()
 {
    key_read ();   //чтение кнопок с защитой от дребезга;
-    outputtype = EEPROM.read(4);
+   
      if ((lcd_key == 5)&&(menu==LOW)) 
         {  
         sizing(); //запуск измерениe
+        if (weight < weight_gate) weighting ();  //ловим вес
             print_stat = digitalRead (print_btn); //запрос состояния кнопки
         if      (((Size_H + Size_W + Size_L) <  SumSizeMin)&&(!print_stat_prew && print_stat)) {display_ready(); weight = 0;} //Размеры стали меньше порога
         else if (((Size_H + Size_W + Size_L) >= SumSizeMin)&&(!print_stat_prew && print_stat)) { //размеры выше порога, кнопка в исходном состоянии, отображаем размеры и вес
-                 if (weight == 0) {weighting ();  display_ok();} //добиваемся чтобы вес побыстрее оказался на экране, затем убираем дребезг размеров
+                if (weight > weight_gate) display_ok(); //добиваемся чтобы вес побыстрее оказался на экране, затем убираем дребезг размеров
               if ((SumSize == 0) || (SumSize <= (Size_H + Size_W + Size_L - SizeGate)) || (SumSize >= (Size_H + Size_W + Size_L + SizeGate))){ //убираем "дребезг" измерения
                  sizing(); //запуск измерениe    
-                   display_ok(); //отображение измерений
+                   display_ok(); //обновление измерений только при значительном измении размеров
                    }
                 SumSize = (Size_H + Size_W + Size_L); //запоминаем сумму размеров
             } 
 //----------вывод данных при автоматическом типе
         if (((Size_H + Size_W + Size_L) >= SumSizeMin)&&(outputtype && !print_stat_prew)) {
                      t=t+1; delay(600); //Serial.println (t);
-                      if ((outputtype && !print_stat_prew) && (t == 4)) {// автоматическая передача данных после 4-х замеров
+                      if ((!outputway && outputtype && !print_stat_prew) && (t == 4)) {// автоматическая передача данных после 4-х замеров
                        printing (); print_stat_prew = HIGH; t = 0;    //вывод данных и запрет на передачу данных, пока не сброшены размеры
                        weight = 0; //сбрасываем вес
                       }
                     } 
 
-        
-        if (((Size_H + Size_W + Size_L) >= SumSizeMin)&&(!print_stat_prew && !print_stat)) { // || outputtype))) {
-                 printing (); // передача данных
-                  weight = 0; //сбрасываем вес
-                   print_stat_prew = HIGH;   //запрет на передачу данных, пока не сброшены размеры
-                 }
-        else if (((Size_H + Size_W + Size_L) < SumSizeMin)&&(print_stat_prew && print_stat)) print_stat_prew = LOW; //перезапуск в режим измерений       
+//----------выдача в ручном режиме        
+         if (((Size_H + Size_W + Size_L) >= SumSizeMin)&&(!outputway && !print_stat_prew && !print_stat)) {  //передача по кнопке
+             printing(); weight = 0; print_stat_prew = HIGH; }  //запрет на передачу данных, пока не сброшены размеры
+         else if (((Size_H + Size_W + Size_L) < SumSizeMin)&&(!outputway && print_stat_prew && print_stat)) print_stat_prew = LOW; //перезапуск в режим измерений из печати по кнопке 
+            
+         if (((Size_H + Size_W + Size_L) >= SumSizeMin)&&(outputway && !print_stat_prew)) {  //передача по запросу РС 
+             serial_listen();
+             if (incomerequest) {printing_com(); weight = 0; print_stat_prew = HIGH; incomerequest = 0;}
+             }  //запрет на передачу данных, пока не сброшены размеры
+         else if (((Size_H + Size_W + Size_L) < SumSizeMin)&&(outputway && print_stat_prew)) print_stat_prew = LOW; incomerequest = LOW; //перезапуск в режим измерений из печати по кнопке       
         }
 //обработка нажатия кнопок в режиме меню 
      else if ((lcd_key == 4)&&(menu == LOW))  menuposition (lcd_key);//главное меню          
@@ -165,7 +171,7 @@ void loop()
      else if ((lcd_key == 1)&&(menu == HIGH)) menuposition (lcd_key); //меню вверх
      else if ((lcd_key == 0)&&(menu == HIGH)) {
           if (menupos == 0) {calibration(); 
-                              for (int i = 10; i < EEPROM.length(); i++) EEPROM.write(i, 0);} // очистка памяти начиная с 10-й ячейки, не трогаем 4 - тип выводв          }
+             for (int i = 10; i < EEPROM.length(); i++) EEPROM.write(i, 0);} // очистка памяти начиная с 10-й ячейки, не трогаем 4 - тип выводв 
           if (menupos == 1) manual_calibration();  //Ручная Калибровка 
           if (menupos == 2) set_outputway();  //Выбор канала вывода
           if (menupos == 3) set_outputtype();  //Выбор типа вывода
@@ -174,16 +180,17 @@ void loop()
 }  //конец цикла loop
 
 //вызываемые функции
-//запрос веса
-float weighting_request(){
-   Serial1.read(); 
-     Serial1.write(0x4A); 
-}
 // получение веса (весы МЕРА протокол печати этикеток) 
 float weighting (){
-    if (Serial1.available()>20) {int tmp = Serial1.parseInt(); weight = Serial1.parseFloat(); delay(20); Serial1.write("!"); }
+    if (Serial1.available()>20) {int tmp = Serial1.parseInt(); weight = Serial1.parseFloat(); Serial1.write("!"); }
         return weight;
 }
+//Чтение команды РС
+boolean serial_listen() {
+  if (Serial.available()>10) {incomerequest = Serial.find("EC,GET,");}
+  return incomerequest; 
+}
+
 
 boolean set_outputway()
       {
@@ -524,53 +531,37 @@ int menuposition (int lcd_key)  // навигация по меню
 
 void printing ()
           {
-       int s1, s2, s3, s4, s5, s6;
-
-Keyboard.write(KEY_RIGHT_ARROW);delay (50); Keyboard.write(KEY_UP_ARROW); delay (50);
+//Keyboard.write(KEY_RIGHT_ARROW);delay (50); Keyboard.write(KEY_UP_ARROW); delay (50);
               
-       long w_prn = (long(weight));
-            s6 = ((w_prn/100000)%10);
-            s5 = ((w_prn/10000)%10);
-            s4 = ((w_prn/1000)%10);
-            s3 = ((w_prn/100)%10);
-            s2 = ((w_prn/10)%10);
-            s1 = ((w_prn)%10);  
-        if (s6 != 0) {Keyboard.print(s6);}
-         if ((s6 != 0)||(s5 != 0)) {Keyboard.print(s5);}  
-         Keyboard.print(s4);
-           Keyboard.print(",");
-            Keyboard.print(s3);
-             Keyboard.print(s2);
-             // Keyboard.print(s1);
+         Keyboard.print(weight);
                 delay (100);
-         Keyboard.write(KEY_RIGHT_ARROW);
+         Keyboard.write(KEY_TAB);
                 delay (100);       
-      
          Keyboard.print(round((float(Size_L))/1));
-             Keyboard.write(KEY_RIGHT_ARROW);
+             Keyboard.write(KEY_TAB);
                 delay (100);
          Keyboard.print(round((float(Size_W))/1));
-             Keyboard.write(KEY_RIGHT_ARROW);
+              Keyboard.write(KEY_TAB);
                 delay (100);
          Keyboard.print(round((float(Size_H))/1));
-              Keyboard.write(KEY_RIGHT_ARROW);
+              Keyboard.write(KEY_RETURN);
                 delay (100);
-                
-                Keyboard.write(KEY_DOWN_ARROW); delay (50); Keyboard.write(KEY_LEFT_ARROW); delay (50);Keyboard.write(KEY_LEFT_ARROW); delay (50); Keyboard.write(KEY_LEFT_ARROW); delay (50); Keyboard.write(KEY_LEFT_ARROW); delay (50); Keyboard.write(KEY_LEFT_ARROW); delay (50);
-             
-
-          display_sent ();
+display_sent();
           }
 
 void printing_com ()  //вывод результатов в COM-порт  ---------------------- сделать 
 {
-  Serial.print("PC,GET,");
-  Serial.print("45,"+ Size_H);
-  Serial.print("46,"+ Size_W);
-  Serial.print("47,"+ Size_L);
-  Serial.print("48,"+ Size_L);
+  Serial.print("PC,GET,45,");
+  Serial.print(Size_H);
+  Serial.print(",46,");
+  Serial.print(Size_W);
+  Serial.print(",47,");
+  Serial.print(Size_L);
+  Serial.print(",48,");
+  Serial.print(weight);
   Serial.print(",");
   Serial.write(0x0D);Serial.write(0x0A);
+display_sent();
 }
 
 void display_sent ()    //экран отправленных данных в РС   
