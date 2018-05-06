@@ -1,19 +1,18 @@
 /////////////////////////////////////////////////////////////
-//   LogisticSonar 3d v.3 base + manual + весы Масса-к     //
-//   Leonardo + моя плата v.2.1 + BAT sensors              //
+//   LogisticSonar 3d v.4.01 + весы Mepa, протокол Этикетка//
+//   Leonardo + моя плата v.2.1 + BAT sensors  + COM       //
 //   DIY-pragmatiс konakovskiy@gmail.com                   //
-//   02.11.2017                                            //
-//   3D Сканер размеров упаковки.                          //
+//   06.05.2018                                            //
+//                                                         //
 /////////////////////////////////////////////////////////////
 //Базовая версия с прямой калибровкой размеров,подключение весов через COM-порт1 !
 //Выход на исходную позицию для сканирования
-//Размещаем коробку с известными размерами и настраиваем их отображение наиболее точно.
-//Максимальные размеры  x  x 0 cm
-//макс. вес:  40 кг (выводятся 3 разряда для целых кг, 3 разряда для граммов)
+//Размещаем коробку с известными размерами и настраиваем отображение размеров наиболее точно.
+//Максимальные размеры 100x100x100 cm
+//макс. вес:  40 кг (выводятся в формате весов)
 //вывод:      размеры в см (3 разряда), 1 знак после запятой
-//            вес в кг, 3 знака после запятой 
-//Передача данных в COM порт по запросу с РС:
-//Строка вывода: 
+//Передача данных в COM порт по запросу с РС:EC,GET,45,46,47,48,<CR><LF>
+//Строка вывода: РС:EC,GET,45,H,46,W,47,L,48,Wt<CR><LF>
 
 uint8_t tochki[8] = {B0, B00000, B0, B0, B0, B0, B10101}; //...
 uint8_t bukva_P[8] = {0x1F, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11}; //П
@@ -60,25 +59,28 @@ boolean outputway = 0;  // канал вывода   0 - клавиатура, 1
 boolean incomerequest = 0; //1 поступление входящего запроса данных
 //
 long SumSizeMin = 60; //порог чувствительности
-long SizeGate = 9 ;  //чувствительность к дребезгу измерения по сумме осей 
+long SizeGate = 6 ;  //чувствительность к дребезгу измерения по сумме осей 
 //Канал ШИРИНА
 int TR_PIN_W = 21; //A3;      //trigger pin on the ultrasonic sensor
 int EC_PIN_W = 20; //A2;      //echo pin on the ultrasonic sensor
 long Base_W_M = 0; //базовое расстояние, введенное руками
 long Base_W = 0;
 long Size_W = 0;
+long Size_W_s = 0; //стабильное значение
 //Канал ДЛИНА
 int TR_PIN_L = A1; //A1;       
 int EC_PIN_L = 2; //D2;         
 long Base_L_M = 0;
 long Base_L = 0;
 long Size_L = 0;
+long Size_L_s = 0;
 //Канал ВЫСОТА
 int TR_PIN_H = 23; //A5     
 int EC_PIN_H = 22; //A4         
 long Base_H_M = 0;
 long Base_H = 0;
 long Size_H = 0;
+long Size_H_s = 0;
 // Определяем кнопки джойстика
 int lcd_key     = 0; //
 int lcd_key_prev= 5; //исходное состояние джойстика
@@ -91,7 +93,7 @@ int adc_key_in  = 0; //сигнал от джойстика
 #define btnNONE      5   
 //Взвешивание
 float weight = 0; //полученный вес
-int weight_gate = 0.02; //минимально взвешиваемый вес
+float weight_gate = 0.02; //минимально взвешиваемый вес
 int prec = 0; //точность вывода веса 0 - без знаков после запятой
 
 
@@ -105,6 +107,7 @@ void setup()
   pinMode (print_btn, INPUT_PULLUP);
   pinMode(10,OUTPUT); digitalWrite(10, 1); //Включаем Подсветка LCD
   display_welcome();    // приглашение
+  delay (1000);
   outputtype = EEPROM.read(4); outputway = EEPROM.read(6);
   Base_H = EEPROM.read(10) | (EEPROM.read(11) << 8);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
   Base_W = EEPROM.read(12) | (EEPROM.read(13) << 8);
@@ -130,24 +133,37 @@ void setup()
 void loop()
 {
    key_read ();   //чтение кнопок с защитой от дребезга;
-   
+    
      if ((lcd_key == 5)&&(menu==LOW)) 
         {  
-        sizing(); //запуск измерениe
-        if (weight < weight_gate) weighting ();  //ловим вес
-            print_stat = digitalRead (print_btn); //запрос состояния кнопки
-        if      (((Size_H + Size_W + Size_L) <  SumSizeMin)&&(!print_stat_prew && print_stat)) {display_ready(); weight = 0;} //Размеры стали меньше порога
-        else if (((Size_H + Size_W + Size_L) >= SumSizeMin)&&(!print_stat_prew && print_stat)) { //размеры выше порога, кнопка в исходном состоянии, отображаем размеры и вес
-                if (weight > weight_gate) display_ok(); //добиваемся чтобы вес побыстрее оказался на экране, затем убираем дребезг размеров
-              if ((SumSize == 0) || (SumSize <= (Size_H + Size_W + Size_L - SizeGate)) || (SumSize >= (Size_H + Size_W + Size_L + SizeGate))){ //убираем "дребезг" измерения
-                 sizing(); //запуск измерениe    
-                   display_ok(); //обновление измерений только при значительном измении размеров
-                   }
-                SumSize = (Size_H + Size_W + Size_L); //запоминаем сумму размеров
-            } 
+         weighting(); 
+              sizing(); //запуск измерениe
+              SumSize = (Size_H + Size_W + Size_L); //запоминаем сумму размеров  
+                print_stat = digitalRead (print_btn); //запрос состояния кнопки
+        if (((Size_H+Size_W+Size_L)<SumSizeMin)&&(!print_stat_prew && print_stat)) {display_ready(); weight = 0; Size_L_s = 0; Size_W_s = 0; Size_H_s = 0;} //Размеры стали меньше порога
+        if (((Size_H+Size_W+Size_L)>=SumSizeMin)&&(!print_stat_prew && print_stat)){
+              if (weight < weight_gate){ //пока нет веса измеряем с большой частотой
+                display_ok(); //размеры есть,кнопка в исходном, веса нет, отображение
+                Size_W_s = Size_W;   //Serial.print (Size_W_s); Serial.print("---"); Serial.println (Size_W);
+                Size_L_s = Size_L; 
+                Size_H_s = Size_H;  //запоминаем стабильные размеры
+                SumSize = (Size_H + Size_W + Size_L);
+              }
+              if (weight > weight_gate){//есть вес - измеряем только при значительном изменении показателей размеров
+               sizing();
+                if ((SumSize==0)||(SumSize<=(Size_H+Size_W+Size_L-SizeGate))||(SumSize>=(Size_H+Size_W+Size_L+SizeGate))) //вес и размеры есть, убираем дребезг по размерам
+                {
+                Size_W_s = Size_W;   
+                Size_L_s = Size_L; 
+                Size_H_s = Size_H;  //запоминаем стабильные размеры
+                display_ok();  SumSize = (Size_H + Size_W + Size_L);
+                } 
+        SumSize = (Size_H + Size_W + Size_L); //запоминаем сумму размеров
+              }
+        }
 //----------вывод данных при автоматическом типе
-        if (((Size_H + Size_W + Size_L) >= SumSizeMin)&&(outputtype && !print_stat_prew)) {
-                     t=t+1; delay(600); //Serial.println (t);
+         if ((((Size_H + Size_W + Size_L) >= SumSizeMin)&&(outputtype && !print_stat_prew))&&(weight>weight_gate)){
+                     t=t+1; delay(750); //Serial.println (t);
                       if ((!outputway && outputtype && !print_stat_prew) && (t == 4)) {// автоматическая передача данных после 4-х замеров
                        printing (); print_stat_prew = HIGH; t = 0;    //вывод данных и запрет на передачу данных, пока не сброшены размеры
                        weight = 0; //сбрасываем вес
@@ -155,17 +171,21 @@ void loop()
                     } 
 
 //----------выдача в ручном режиме        
+       
          if (((Size_H + Size_W + Size_L) >= SumSizeMin)&&(!outputway && !print_stat_prew && !print_stat)) {  //передача по кнопке
              printing(); weight = 0; print_stat_prew = HIGH; }  //запрет на передачу данных, пока не сброшены размеры
          else if (((Size_H + Size_W + Size_L) < SumSizeMin)&&(!outputway && print_stat_prew && print_stat)) print_stat_prew = LOW; //перезапуск в режим измерений из печати по кнопке 
-            
-         if (((Size_H + Size_W + Size_L) >= SumSizeMin)&&(outputway && !print_stat_prew)) {  //передача по запросу РС 
-             serial_listen();
-             if (incomerequest) {printing_com(); weight = 0; print_stat_prew = HIGH; incomerequest = 0;}
-             }  //запрет на передачу данных, пока не сброшены размеры
-         else if (((Size_H + Size_W + Size_L) < SumSizeMin)&&(outputway && print_stat_prew)) print_stat_prew = LOW; incomerequest = LOW; //перезапуск в режим измерений из печати по кнопке       
-        }
-//обработка нажатия кнопок в режиме меню 
+
+//----------передача по запросу РС:    
+ 
+         if ((((Size_H + Size_W + Size_L) >= SumSizeMin)&&(outputway && !print_stat_prew))&&(weight>weight_gate)) {
+           serial_listen();
+            if (incomerequest) {printing_com(); weight = 0; print_stat_prew = HIGH; incomerequest = 0; } 
+         } 
+         else if (((Size_H + Size_W + Size_L) < SumSizeMin)&&(outputway && print_stat_prew)) {print_stat_prew = LOW;} //перезапуск в режим измерений из передача в РС       
+         }
+
+//-----------обработка нажатия кнопок в режиме меню 
      else if ((lcd_key == 4)&&(menu == LOW))  menuposition (lcd_key);//главное меню          
      else if ((lcd_key == 2)&&(menu == HIGH)) menuposition (lcd_key); //меню вниз
      else if ((lcd_key == 1)&&(menu == HIGH)) menuposition (lcd_key); //меню вверх
@@ -180,16 +200,87 @@ void loop()
 }  //конец цикла loop
 
 //вызываемые функции
-// получение веса (весы МЕРА протокол печати этикеток) 
-float weighting (){
-    if (Serial1.available()>20) {int tmp = Serial1.parseInt(); weight = Serial1.parseFloat(); Serial1.write("!"); }
-        return weight;
-}
 //Чтение команды РС
 boolean serial_listen() {
-  if (Serial.available()>10) {incomerequest = Serial.find("EC,GET,");}
+ 
+  //incomerequest = 0; 
+  if (Serial.available()>0) {
+    delay (10); incomerequest = Serial.find("EC,GET,45,46,47,48");
+    if (!incomerequest) {Serial.flush(); incomerequest = 0;}
+    //Serial.println (incomerequest);
+    }
   return incomerequest; 
 }
+
+
+void display_sent ()    //экран отправленных данных в РС   
+        {
+        int pos=14;
+        lcd.clear(); lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_P); 
+            lcd.setCursor(0, 0);
+            if (lang) lcd.print("Data sent:");
+            if (!lang){
+               lcd.print("OT"); lcd.write(2); lcd.print("PAB"); lcd.write(1); lcd.print("EHO:");
+             }
+         
+         lcd.setCursor(11,3); lcd.print("Wt "); 
+                  if (weight<1000) {pos = 13;}    
+                  if (weight<100)  {pos = 14;} 
+                  if (weight<10)   {pos = 15;} 
+                  lcd.setCursor(pos,3); lcd.print(weight);
+                  
+         lcd.setCursor(12,0); lcd.print("L ");
+                  if (Size_L_s<10000) {pos = 15;}    
+                  if (Size_L_s<1000)  {pos = 16;} 
+                  if (Size_L_s<100)   {pos = 17;} 
+                  if (Size_L_s<10)    {pos = 18;}
+                  lcd.setCursor(pos,0);lcd.print(Size_L_s); 
+                        
+         lcd.setCursor(12,1); lcd.print("W "); 
+                  if (Size_W_s<10000) {pos = 15;}     
+                  if (Size_W_s<1000)  {pos = 16;} 
+                  if (Size_W_s<100)   {pos = 17;} 
+                  if (Size_W_s<10)    {pos = 18;} 
+                  lcd.setCursor(pos,1);lcd.print(Size_W_s); 
+                        
+         lcd.setCursor(12,2); lcd.print("H "); 
+                  if (Size_H_s<10000) {pos = 15;}     
+                  if (Size_H_s<1000)  {pos = 16;} 
+                  if (Size_H_s<100)   {pos = 17;}
+                  if (Size_H_s<10)    {pos = 18;}
+                  lcd.setCursor(pos,2);lcd.print(Size_H_s);       
+         }
+void printing ()
+          {
+         Keyboard.print(weight); delay (50); Keyboard.write(KEY_TAB);delay (50);       
+         Keyboard.print(round((float(Size_L_s))/1)); Keyboard.write(KEY_TAB); delay (50); 
+         Keyboard.print(round((float(Size_W_s))/1)); Keyboard.write(KEY_TAB); delay (50);
+         Keyboard.print(round((float(Size_H_s))/1)); Keyboard.write(KEY_RETURN); delay (50);
+            display_sent();
+          }
+
+void printing_com ()  //вывод результатов в COM-порт  ---------------------- сделать 
+{
+  Serial.print("PC,GET,45,");
+  Serial.print(Size_H_s);
+  Serial.print(",46,");
+  Serial.print(Size_W_s);
+  Serial.print(",47,");
+  Serial.print(Size_L_s);
+  Serial.print(",48,");
+  Serial.print(weight);
+  Serial.print(",");
+  Serial.write(0x0D);Serial.write(0x0A);
+display_sent();
+}
+
+
+// получение веса (весы МЕРА протокол печати этикеток) 
+float weighting (){
+    if (Serial1.available()>4) {delay(5); int tmp = Serial1.parseInt(); weight = Serial1.parseFloat(); Serial1.write("!"); display_ok(); }
+        return weight;
+}
+
 
 
 boolean set_outputway()
@@ -529,50 +620,8 @@ int menuposition (int lcd_key)  // навигация по меню
            return menupos;
 }  
 
-void printing ()
-          {
-//Keyboard.write(KEY_RIGHT_ARROW);delay (50); Keyboard.write(KEY_UP_ARROW); delay (50);
-              
-         Keyboard.print(weight);
-                delay (100);
-         Keyboard.write(KEY_TAB);
-                delay (100);       
-         Keyboard.print(round((float(Size_L))/1));
-             Keyboard.write(KEY_TAB);
-                delay (100);
-         Keyboard.print(round((float(Size_W))/1));
-              Keyboard.write(KEY_TAB);
-                delay (100);
-         Keyboard.print(round((float(Size_H))/1));
-              Keyboard.write(KEY_RETURN);
-                delay (100);
-display_sent();
-          }
 
-void printing_com ()  //вывод результатов в COM-порт  ---------------------- сделать 
-{
-  Serial.print("PC,GET,45,");
-  Serial.print(Size_H);
-  Serial.print(",46,");
-  Serial.print(Size_W);
-  Serial.print(",47,");
-  Serial.print(Size_L);
-  Serial.print(",48,");
-  Serial.print(weight);
-  Serial.print(",");
-  Serial.write(0x0D);Serial.write(0x0A);
-display_sent();
-}
 
-void display_sent ()    //экран отправленных данных в РС   
-        {
-        lcd.clear(); lcd.createChar(1, bukva_L); lcd.createChar(2, bukva_P); 
-            lcd.setCursor(0, 1);
-            if (lang) lcd.print("   Data sent: Ok!");
-            if (!lang){
-               lcd.print("    OT"); lcd.write(2); lcd.print("PAB"); lcd.write(1); lcd.print("EHO !");
-             }  
-         }
 //Функция калибровки, измеряем 3 раза, находим среднее арифметическое.     
 
 long calibration()   {
@@ -653,9 +702,9 @@ long sizing () {  // обмер по трем осям
           measuring (TR_PIN_W, EC_PIN_W); Size_W = Base_W - Size; delay (30);
           measuring (TR_PIN_L, EC_PIN_L); Size_L = Base_L - Size; delay (30);
          menu = LOW;
-        weighting(); //Serial.print("fast weight"); Serial.println(weight);      // вылавливал дрейф тары
+        //weighting(); //Serial.print("fast weight"); Serial.println(weight);      // вылавливал дрейф тары
         // Serial.print(" H-"); Serial.print(Base_H)  ;Serial.print(" W-"); Serial.print(Base_W)  ;Serial.print(" L-"); Serial.println(Base_L)  ;
-        return Size_H, Size_W, Size_L; //Измеряем про осям по осям
+        return Size_H, Size_W, Size_L;//Измеряем про осям по осям
         }
 
 void display_ok ()   //экран режима измерения   
@@ -674,14 +723,14 @@ void display_welcome() // заставка при включении
             lcd.createChar(1, bukva_I); lcd.createChar(2, bukva_G); lcd.createChar(3, bukva_Ya); lcd.createChar(4, bukva_D); lcd.createChar(5, bukva_L); // создаем символы и записываем их в память LCD
             lcd.setCursor(0, 0);  lcd.print("    MACTEP K");lcd.write(1); lcd.print("T");
             lcd.setCursor(0, 2);  lcd.print("CKAHEP ");lcd.write(4);lcd.write(5);lcd.write(3); lcd.print(" ");lcd.write(5);lcd.print("O");lcd.write(2);lcd.write(1);lcd.print("CT");lcd.write(1);lcd.print("K");lcd.write(1);
-            lcd.setCursor(0, 3);  lcd.print("      v.3.0");
-            delay (1000);
+            lcd.setCursor(0, 3);  lcd.print("      v.4.01");
+            //delay (1000);
          }  
          if (lang) {
             lcd.setCursor(0, 0);  lcd.print("     Master Kit");
             lcd.setCursor(0, 2);  lcd.print("   Logistic Scaner");
-            lcd.setCursor(0, 3);  lcd.print("       v.3.0");
-            delay (1000);  
+            lcd.setCursor(0, 3);  lcd.print("       v.4.01");
+            //delay (1000);  
          }
 }
 
@@ -696,4 +745,4 @@ int read_LCD_buttons() //считываем нажатие джойстика М
           if (adc_key_in < 800)  return btnSELECT;        
           if (adc_key_in < 900)  return btnLEFT;   
           return btnNONE;  
-          }          
+          }               
