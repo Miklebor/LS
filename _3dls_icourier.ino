@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////
 //   LogisticSonar 3d v.4.01 + весы Mepa, протокол Этикетка//
 //   Leonardo + моя плата v.2.1 + BAT sensors  + COM       //
-//                                                         //
-//   06.05.2018                                            //
-//                                                         //
+//   DIY-pragmatiс konakovskiy@gmail.com                   //
+//   15.05.2018                                            //
+//   финальная версия                                                      //
 /////////////////////////////////////////////////////////////
 //Базовая версия с прямой калибровкой размеров,подключение весов через COM-порт1 !
 //Выход на исходную позицию для сканирования
@@ -61,15 +61,15 @@ boolean incomerequest = 0; //1 поступление входящего зап�
 long SumSizeMin = 60; //порог чувствительности
 long SizeGate = 6 ;  //чувствительность к дребезгу измерения по сумме осей 
 //Канал ШИРИНА
-int TR_PIN_W = 21; //A3;      //trigger pin on the ultrasonic sensor
-int EC_PIN_W = 20; //A2;      //echo pin on the ultrasonic sensor
+int TR_PIN_L = 21; //A3;      //trigger pin on the ultrasonic sensor
+int EC_PIN_L = 20; //A2;      //echo pin on the ultrasonic sensor
 long Base_W_M = 0; //базовое расстояние, введенное руками
 long Base_W = 0;
 long Size_W = 0;
 long Size_W_s = 0; //стабильное значение
 //Канал ДЛИНА
-int TR_PIN_L = A1; //A1;       
-int EC_PIN_L = 2; //D2;         
+int TR_PIN_W = A1; //A1;       
+int EC_PIN_W = 2; //D2;         
 long Base_L_M = 0;
 long Base_L = 0;
 long Size_L = 0;
@@ -139,7 +139,7 @@ void loop()
          weighting(); 
               sizing(); //запуск измерениe
               SumSize = (Size_H + Size_W + Size_L); //запоминаем сумму размеров  
-                print_stat = digitalRead (print_btn); //запрос состояния кнопки
+                print_stat = digitalRead (print_btn); //запрос состояния кнопки записи
         if (((Size_H+Size_W+Size_L)<SumSizeMin)&&(!print_stat_prew && print_stat)) {display_ready(); weight = 0; Size_L_s = 0; Size_W_s = 0; Size_H_s = 0;} //Размеры стали меньше порога
         if (((Size_H+Size_W+Size_L)>=SumSizeMin)&&(!print_stat_prew && print_stat)){
               if (weight < weight_gate){ //пока нет веса измеряем с большой частотой
@@ -169,7 +169,7 @@ void loop()
                        weight = 0; //сбрасываем вес
                       }
                     } 
-
+//
 //----------выдача в ручном режиме        
        
          if (((Size_H + Size_W + Size_L) >= SumSizeMin)&&(!outputway && !print_stat_prew && !print_stat)) {  //передача по кнопке
@@ -253,20 +253,20 @@ void display_sent ()    //экран отправленных данных в Р
 void printing ()
           {
          Keyboard.print(weight); delay (50); Keyboard.write(KEY_TAB);delay (50);       
-         Keyboard.print(round((float(Size_L_s))/1)); Keyboard.write(KEY_TAB); delay (50); 
-         Keyboard.print(round((float(Size_W_s))/1)); Keyboard.write(KEY_TAB); delay (50);
-         Keyboard.print(round((float(Size_H_s))/1)); Keyboard.write(KEY_RETURN); delay (50);
+         Keyboard.print(round((float(Size_L_s))/10)); Keyboard.write(KEY_TAB); delay (50); 
+         Keyboard.print(round((float(Size_W_s))/10)); Keyboard.write(KEY_TAB); delay (50);
+         Keyboard.print(round((float(Size_H_s))/10)); Keyboard.write(KEY_RETURN); delay (50);
             display_sent();
           }
 
 void printing_com ()  //вывод результатов в COM-порт  ---------------------- сделать 
 {
   Serial.print("PC,GET,45,");
-  Serial.print(Size_H_s);
+  Serial.print(round((float(Size_H_s))/10));
   Serial.print(",46,");
-  Serial.print(Size_W_s);
+  Serial.print(round((float(Size_W_s))/10));
   Serial.print(",47,");
-  Serial.print(Size_L_s);
+  Serial.print(round((float(Size_L_s))/10));
   Serial.print(",48,");
   Serial.print(weight);
   Serial.print(",");
@@ -277,7 +277,8 @@ display_sent();
 
 // получение веса (весы МЕРА протокол печати этикеток) 
 float weighting (){
-    if (Serial1.available()>4) {delay(5); int tmp = Serial1.parseInt(); weight = Serial1.parseFloat(); Serial1.write("!"); display_ok(); }
+    if (Serial1.available()>10) {delay(2); int tmp = Serial1.parseInt(); weight = Serial1.parseFloat(); delay(5); Serial1.write("!"); display_ok();}
+        if (weight>0) {Serial1.flush(); }
         return weight;
 }
 
@@ -404,7 +405,7 @@ int manualcorr ()  //ручная коррекция базовых размер
               {
               sizing(); //запускаю обмер
               //display_manualcorr (0);
-              key_read ();  Serial.println (adc_key_in = analogRead(0)); // чтение кнопок
+              key_read ();  //Serial.println (adc_key_in = analogRead(0)); // чтение кнопок
               // движение фокуса по значку осей
               if (lcd_key == 2) {focuspos = focuspos + 1 ; display_manualcorr (focuspos);}
               if (lcd_key == 1) {focuspos = focuspos - 1 ; display_manualcorr (focuspos);}
@@ -745,4 +746,4 @@ int read_LCD_buttons() //считываем нажатие джойстика М
           if (adc_key_in < 800)  return btnSELECT;        
           if (adc_key_in < 900)  return btnLEFT;   
           return btnNONE;  
-          }               
+          }          
